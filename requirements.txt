@@ -4,3 +4,4 @@ streamlit==0.71.0
 pandas==1.1.2
 pip>=24.2
 setuptools>=74.1.2
+implicit==0.4.8  # Update or pin to a specific version if available
