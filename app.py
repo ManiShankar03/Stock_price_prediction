@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# In[11]:
+
+
+#!/usr/bin/env python
+# coding: utf-8
+
 # Imports
 from sklearn.preprocessing import MinMaxScaler
 import plotly.graph_objects as go
@@ -15,46 +21,6 @@ from pandas.tseries.offsets import BDay
 st.set_page_config(
     page_title="Stock Price Prediction",
     page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Set the dark theme
-st.markdown(
-    """
-    <style>
-    .reportview-container {
-        background-color: #0e1117;
-        color: #ffffff;
-    }
-    .sidebar .sidebar-content {
-        background-color: #1f1f1f;
-        color: #ffffff;
-    }
-    .stButton>button {
-        background-color: #1f77b4;
-        color: #ffffff;
-    }
-    .stMarkdown {
-        color: #ffffff;
-    }
-    .stTextInput>div>input {
-        background-color: #1f1f1f;
-        color: #ffffff;
-    }
-    .stDataFrame {
-        background-color: #1f1f1f;
-        color: #ffffff;
-    }
-    .stDataFrame td, .stDataFrame th {
-        border: 1px solid #ffffff;
-    }
-    .stPlotlyChart {
-        background-color: #0e1117;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
 )
 
 # Load the LSTM model
@@ -131,6 +97,23 @@ else:
         # Convert future_predictions to a NumPy array and flatten it
         future_predictions = np.array(future_predictions).flatten()
 
+        # Adjust the future predictions to smooth the forecast
+        smoothed_predictions = []
+        for i in range(len(future_predictions)):
+            if i > 0:
+                # Reduce the value if it's more than 20% higher than the previous value
+                if future_predictions[i] > 1.2 * smoothed_predictions[-1]:
+                    smoothed_predictions.append(smoothed_predictions[-1] * 1.1)
+                # Increase the value if it's more than 20% lower than the previous value
+                elif future_predictions[i] < 0.8 * smoothed_predictions[-1]:
+                    smoothed_predictions.append(smoothed_predictions[-1] * 0.9)
+                else:
+                    smoothed_predictions.append(future_predictions[i])
+            else:
+                smoothed_predictions.append(future_predictions[i])
+        
+        future_predictions = np.array(smoothed_predictions)
+
         # Function to get the next business day
         def get_next_business_day(start_date):
             next_business_day = start_date + BDay(1)
@@ -160,14 +143,22 @@ else:
                     data['EMA_short'] = data['c'].ewm(span=12, adjust=False).mean()  # Short-term EMA
                     data['EMA_long'] = data['c'].ewm(span=26, adjust=False).mean()  # Long-term EMA
 
-            data['Signal'] = 'Hold'
+            # Define a threshold for approximate equality
+            threshold = 0.005 * data['EMA_long']  # 0.5% of the long-term EMA
+
+            # Determine the signals based on EMAs and the threshold
             data['Signal'] = np.where(
-                (data['EMA_short'] > data['EMA_long']) & (data['RSI'] < 50),
+                (data['EMA_short'] > data['EMA_long'] + threshold),
                 'Buy Stocks',
                 np.where(
-                    (data['EMA_short'] < data['EMA_long']) & (data['RSI'] > 60),
+                    (data['EMA_short'] < data['EMA_long'] - threshold),
                     'Sell Stocks',
-                    'Hold Stocks'
+                    np.where(
+                        (np.abs(data['EMA_short'] - data['EMA_long']) <= threshold),
+                        'Consider Entry/Hold Stocks',
+                        'Hold Stocks/Consider Entry'
+                        
+                    )
                 )
             )
             return data
@@ -195,9 +186,9 @@ else:
         
         # Create prediction graph
         fig = go.Figure(data=[
-            go.Scatter(x=ticker_data.index, y=ticker_data["c"], name="Actual", mode="lines", line=dict(color="cyan")),
-            go.Scatter(x=ticker_data.index, y=predictions_series, name="Predictions", mode="lines", line=dict(color="orange")),
-            go.Scatter(x=forecast_index, y=future_predictions, name="Future Forecast", mode="lines", line=dict(color="lime")),
+            go.Scatter(x=ticker_data.index, y=ticker_data["c"], name="Actual", mode="lines", line=dict(color="blue")),
+            go.Scatter(x=ticker_data.index, y=predictions_series, name="Predictions", mode="lines", line=dict(color="red")),
+            go.Scatter(x=forecast_index, y=future_predictions, name="Future Forecast", mode="lines", line=dict(color="green")),
         ])
 
         fig.update_layout(xaxis_rangeslider_visible=False)
@@ -214,10 +205,13 @@ else:
         ).format({"Forecasted Price": "${:.2f}"})
         st.dataframe(styled_forecast_df)
         
-        # Function to check for market crash
-        def check_market_crash(forecast_df):
-            alerts = []
-            # Criteria 1: Percentage Drop
-            percentage_threshold = 52
-            forecast_df['Percentage Change'] = forecast_df['Forecasted Price'].pct_change() * 100
-            for i in range(1, len(fore
+        # Download forecasted values as CSV
+        st.markdown("### **Download Forecasted Values**")
+        csv = forecast_df.to_csv(index=False)
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name=f'forecast_{stock}.csv',
+            mime='text/csv'
+        )
+
