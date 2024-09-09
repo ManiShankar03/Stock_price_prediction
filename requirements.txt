@@ -1,7 +1,7 @@
-tensorflow==2.17.0
-numpy>=1.26.0
-streamlit==0.71.0
-pandas==1.1.2
-pip>=24.2
-setuptools>=74.1.2
-implicit==0.4.8  # Update or pin to a specific version if available
+streamlit==1.18.1
+pandas==2.0.3
+numpy==1.24.4
+tensorflow==2.14.0
+joblib==1.3.1
+plotly==5.13.1
+scikit-learn==1.3.2 # Update or pin to a specific version if available
